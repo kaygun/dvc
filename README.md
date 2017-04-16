@@ -4,7 +4,7 @@
 
 In my line of work, for tracking different versions of a single
 file [git][1], [mercurial][2] or [svn][3] are much too heavy.
-Then there is the issue of remember all the bells and whistles
+Then there is the issue of remembering all bells and whistles
 of each of these version control systems.  After losing a day's
 worth of work for using a wrong switch on git, I decided to write
 a very dumb version control system aptly called `dvc`.
