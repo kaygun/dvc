@@ -1,0 +1,161 @@
+#!/bin/bash
+
+BASE=./.dvc
+REGISTRY=$BASE/registry
+VAULT=$BASE/vault
+NULL="________________________________" 
+DATE=$(date +"%F-%T")
+
+function cleanUp {
+  sort -k2 -r $REGISTRY | \
+       uniq -f1 | \
+       awk -v null=${NULL} '{if($3==null || $3!=$4){print $0;}}' | \
+       sort -k1 > $REGISTRY.temp 
+  mv $REGISTRY.temp $REGISTRY
+}
+
+function update {
+  NAME=$1
+  SIGNATURE=$2
+  cp $REGISTRY $REGISTRY.old
+  sed "s/$NAME\ $NULL/$NAME\ $SIGNATURE/" $REGISTRY.old > $REGISTRY
+}
+
+function current {
+  NAME=$1
+  SIGNATURE=$2
+  echo "$DATE $NAME $NULL $SIGNATURE" >> $REGISTRY
+}
+
+function check {
+  NAME=$1
+  REV=$2
+  NUM=$(grep "$NAME $REV" $REGISTRY | grep "$3" | wc -l)
+  if [[ $NUM -ge 2 ]]; then
+     echo "Ambiguity: more than one branch."
+     exit
+  fi
+  if [[ $NUM -eq 0 ]]; then
+     echo "No such branch exists."
+     exit
+  fi
+}
+
+function init {
+  if [[ -e $VAULT ]]; then
+     echo "Already initialized."
+  else
+     mkdir $BASE
+     mkdir $VAULT
+     touch $REGISTRY $REGISTRY.temp
+  fi
+  exit
+}
+
+function register {
+  NAME=$1
+  SIGNATURE=$(md5sum $NAME | cut -c-32)
+  PARENT=$(grep "$NAME $NULL" $REGISTRY | cut -d' ' -f4)
+  LOOP=$(grep "$NAME $SIGNATURE $PARENT" $REGISTRY)
+  if [[ $PARENT = "" ]]; then
+     if [[ $EXISTS = !"" ]]; then 
+        echo "Already in registry."
+     else
+        echo "$DATE $NAME $NULL $NULL" >> $REGISTRY
+     fi
+  fi
+  if [[ $SIGNATURE = $PARENT ]]; then
+     echo "No discernible change in $NAME."
+     exit
+  fi
+  if [[ $LOOP = "" ]]; then
+     update $NAME $SIGNATURE
+     cp $NAME $VAULT/$SIGNATURE
+     current $NAME $SIGNATURE
+  else
+     echo "Loop?"
+  fi
+  exit
+}
+
+function checkout {
+  NAME=$1
+  REV=$2
+  check $NAME $REV $3
+  SIGNATURE=$(md5sum $NAME | cut -c-32)
+  PARENT=$(grep "$NAME $SIGNATURE" $REGISTRY | grep "$3" | cut -d' ' -f4)
+  LOOP=$(grep "$NAME $SIGNATURE $PARENT" $REGISTRY)
+  FULLNAME=$(ls $VAULT/$REV*)
+  update $NAME $SIGNATURE
+  cp $FULLNAME $NAME
+  SIGNATURE=$(md5sum $NAME | cut -c-32)
+  current $NAME $SIGNATURE
+  exit
+}
+
+function graph {
+  SIGNATURE=$(md5sum $NAME | cut -c-32)
+  grep $1 $REGISTRY | \
+  sort -k1 | \
+  awk 'BEGIN { print "digraph G { node[shape=box];"; } \
+       { print "\"" $2 ": " $4 "\" -> \"" $2 ": " $3 "\";" } \
+       END { print "}" }' \
+  > $SIGNATURE.dot
+  graph-easy --from=graphviz --as=ascii $SIGNATURE.dot
+  rm $SIGNATURE.dot
+  exit
+}
+
+function explain {
+  NAME=$1
+  REV=$2
+  check $NAME $REV $3
+  RAW=$(grep "$NAME $REV" $REGISTRY)
+  SIGNATURE=$(echo $RAW | cut -d' ' -f3)
+  PARENT=$(echo $RAW | cut -d' ' -f4)
+  if [[ $PARENT = $NULL ]]; then
+     echo "This is the root branch."
+  else
+     diff $VAULT/$SIGNATURE $VAULT/$PARENT
+  fi
+  exit
+}
+
+if [[ -e $BASE ]]; then 
+   cleanUp
+   case $1 in
+     init) init 
+     ;;
+     checkout) checkout $2 $3 $4
+     ;;
+     register) register $2
+     ;;
+     graph) graph $2
+     ;;
+     explain) explain $2 $3
+     ;;
+     log) grep $2 $REGISTRY | sort -k1
+     ;;
+     *|help) echo "dvc init <directory>
+    Start tracking <directory>
+
+dvc register <file>
+    Register the current version of <file>
+
+dvc checkout <file> <revision>
+    Checkout <revision> version of <file>
+
+dvc explain <file> <revision>
+    Show the diff of <file> with its parent
+
+dvc log <file>
+    Show the version history of <file>
+
+dvc graph <file>
+    Show the version history of <file> as a graph"
+     ;;
+   esac
+else
+   echo "dvc doesn't tract this directory"
+fi
+
