@@ -32,6 +32,10 @@ No.
 
 ## Dependencies
 
+`dvc` heavily depends on [MD5][5] hash sum signatures. I am using [`md5sum`][6] which
+comes with coreutils.  But if you'd like to use another hash function, you should
+edit the source and make the change.
+
 `dvc` uses [graph-easy][4] to display the dependency tree.  If you'd like
 to use that feature, you should install it.
 
@@ -45,3 +49,5 @@ but you may lose files, data, code etc. due to unforseen circumstances.
 [2]: https://www.mercurial-scm.org/
 [3]: https://subversion.apache.org/
 [4]: http://bloodgate.com/perl/graph/manual/
+[5]: https://en.wikipedia.org/wiki/MD5 
+[6]: https://en.wikipedia.org/wiki/Md5sum
