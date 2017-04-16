@@ -42,8 +42,8 @@ to use that feature, you should install it.
 ## Bugs?
 
 Many. This is a personal project, and by no means is *production quality*,
-whatever that may mean.  By design `dvc` doesn't delete any file it tracks,
-but you may lose files, data, code etc. due to unforseen circumstances.
+whatever that may mean.  By design `dvc` doesn't delete any files. But you may 
+lose files, data, code etc. due to unforseen circumstances.
 
 [1]: https://git-scm.com/
 [2]: https://www.mercurial-scm.org/
