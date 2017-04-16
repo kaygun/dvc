@@ -94,6 +94,7 @@ function checkout {
 }
 
 function graph {
+  NAME=$1
   SIGNATURE=$(md5sum $NAME | cut -c-32)
   grep $1 $REGISTRY | \
   sort -k1 | \
