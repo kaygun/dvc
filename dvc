@@ -61,7 +61,7 @@ function register {
      if [[ $EXISTS = !"" ]]; then 
         echo "Already in registry."
      else
-        echo "$DATE $NAME $NULL $NULL" >> $REGISTRY
+	current $NAME $NULL
      fi
   fi
   if [[ $SIGNATURE = $PARENT ]]; then
