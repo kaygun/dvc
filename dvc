@@ -7,10 +7,10 @@ NULL="________________________________"
 DATE=$(date +"%F-%T")
 
 function cleanUp {
-  sort -k2 -r $REGISTRY | \
+  sort -k2 $REGISTRY | \
        uniq -f1 | \
        awk -v null=${NULL} '{if($3==null || $3!=$4){print $0;}}' | \
-       sort -k1 > $REGISTRY.temp 
+       sort -k1 -r > $REGISTRY.temp 
   mv $REGISTRY.temp $REGISTRY
 }
 
@@ -121,11 +121,17 @@ function explain {
   exit
 }
 
-if [[ -e $BASE ]]; then 
+if [[ $1 = "init" ]]; then
+   init
+   exit
+fi
+if [[ -e $BASE ]]; then	
    cleanUp
-   case $1 in
-     init) init 
-     ;;
+else
+   echo "dvc doesn't track this directory"
+   exit
+fi
+case $1 in
      checkout) checkout $2 $3 $4
      ;;
      register) register $2
@@ -154,8 +160,5 @@ dvc log <file>
 dvc graph <file>
     Show the version history of <file> as a graph"
      ;;
-   esac
-else
-   echo "dvc doesn't tract this directory"
-fi
+esac
 
