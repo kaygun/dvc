@@ -14,16 +14,13 @@ a very dumb version control system aptly called `dvc`.
 By design `dvc` doesn't do much: It tracks individual files 
 and does not do much else.
 
-1. tracks individual files
-2. can show the diff between a version and its parent
-3. can show dependency tree both as a log and as a graph
+1. It tracks individual files.
+2. You can safely checkout different versions.
+3. It can show the diff between a version and its parent.
+4. It can show version tree both as a log and as a graph.
 
 If you need more functionality than the ones I described above,
 you probably need a more sophisticated version control system.
-
-## Does it do X? 
-
-No.
 
 ## Is it going to do X?
 
