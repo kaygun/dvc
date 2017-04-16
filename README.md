@@ -32,7 +32,7 @@ No.
 
 ## Dependencies
 
-`dvc` heavily depends on [MD5][5] hash sum signatures. I am using [`md5sum`][6] which
+`dvc` heavily depends on [MD5][5] hash signatures. I am using [`md5sum`][6] which
 comes with coreutils.  But if you'd like to use another hash function, you should
 edit the source and make the change.
 
