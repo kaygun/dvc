@@ -22,7 +22,7 @@ as a directed acyclic graph (DAG) and doesn't do much else.
 If you need more functionality than the ones I described above,
 you probably need a more sophisticated version control system.
 
-## Is it going to do X?
+## Is it going to do $X?
 
 No.
 

@@ -61,7 +61,7 @@ function register {
      if [[ $EXISTS = !"" ]]; then 
         echo "Already in registry."
      else
-	current $NAME $NULL
+        echo "$DATE $NAME $NULL $NULL" >> $REGISTRY
      fi
   fi
   if [[ $SIGNATURE = $PARENT ]]; then
@@ -100,9 +100,8 @@ function graph {
   sort -k1 | \
   awk 'BEGIN { print "digraph G { node[shape=box];"; } \
        { print "\"" $2 ": " $4 "\" -> \"" $2 ": " $3 "\";" } \
-       END { print "}" }' \
-  > $SIGNATURE.dot
-  graph-easy --from=graphviz --as=ascii $SIGNATURE.dot
+       END { print "}" }' > $SIGNATURE.dot
+  graph-easy $SIGNATURE.dot --from=graphviz --as=ascii 
   rm $SIGNATURE.dot
   exit
 }
@@ -141,35 +140,25 @@ case $1 in
      ;;
      explain) explain $2 $3
      ;;
-     log) echo "DATE FILENAME FILE_HASH PARENT_HASH"
-	  grep $2 $REGISTRY | sort -k1
+     log) grep $2 $REGISTRY | sort -k1
      ;;
      *|help) echo "dvc init <directory>
-    Start tracking <directory>.
+    Start tracking <directory>
 
 dvc register <file>
-    Register the current version of <file> in the dvc DAG.
+    Register the current version of <file>
 
 dvc checkout <file> <revision>
-    Checkout <revision> version of <file>.
-    If the current version is not registered, dvc registers
-    the current version first before checking out <revision>
-    to prevent an unintensional loss of data.
+    Checkout <revision> version of <file>
 
 dvc explain <file> <revision>
-    Show the diff of <file> <revition> with its parent.
+    Show the diff of <file> with its parent
 
 dvc log <file>
-    Show the version history of <file>.
-    Log consists of registration time, name of the file,
-    that version's hash signature and its parent's hash
-    signature in that order.  The current version is
-    signified with the ROOT signature designated as 
-    '________________________________'.
+    Show the version history of <file>
 
 dvc graph <file>
-    Show the version history of <file> as a graph
-    The current version points to ROOT in the graph."
+    Show the version history of <file> as a graph"
      ;;
 esac
 
