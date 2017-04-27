@@ -84,7 +84,6 @@ function checkout {
   check $NAME $REV $3
   SIGNATURE=$(md5sum $NAME | cut -c-32)
   PARENT=$(grep "$NAME $SIGNATURE" $REGISTRY | grep "$3" | cut -d' ' -f4)
-  LOOP=$(grep "$NAME $SIGNATURE $PARENT" $REGISTRY)
   FULLNAME=$(ls $VAULT/$REV*)
   update $NAME $SIGNATURE
   cp $FULLNAME $NAME
