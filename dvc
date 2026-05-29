@@ -1,163 +1,84 @@
 #!/bin/bash
+set -euo pipefail
+DVC_DIR=".dvc" REGISTRY="$DVC_DIR/registry" VAULT="$DVC_DIR/vault"
 
-BASE=./.dvc
-REGISTRY=$BASE/registry
-VAULT=$BASE/vault
-NULL="________________________________" 
-DATE=$(date +"%F-%T")
+die() { echo "Error: $1" >&2; exit 1; }
 
-function cleanUp {
-  sort -k2 $REGISTRY | \
-       uniq -f1 | \
-       awk -v null=${NULL} '{if($3==null || $3!=$4){print $0;}}' | \
-       sort -k1 -r > $REGISTRY.temp 
-  mv $REGISTRY.temp $REGISTRY
+usage() { cat <<'EOF'
+Usage: dvc <command> [<args>]
+Commands:
+  init                  Initialise DVC tracking in the current directory
+  register <file>       Save the current version of <file>
+  checkout <file> <rev> Restore <file> to revision <rev> (prefix of MD5)
+  explain <file> <rev>  Show diff between <rev> and its parent
+  log <file>            Show commit history of <file>
+  graph <file>          Draw ASCII history graph of <file>
+EOF
+exit 1; }
+
+latest_signature() { grep "^[^ ]* $1 " "$REGISTRY" 2>/dev/null | tail -1 | awk '{print $3}' || true; }
+
+resolve_rev() {
+    local matches=("$VAULT/$2"*)
+    [[ ${#matches[@]} -eq 0 ]] && die "no revision matches prefix '$2'."
+    [[ ${#matches[@]} -gt 1 ]] && die "ambiguous prefix '$2' matches multiple revisions."
+    _resolved="${matches[0]}"
 }
 
-function update {
-  NAME=$1
-  SIGNATURE=$2
-  cp $REGISTRY $REGISTRY.old
-  sed "s/$NAME\ $NULL/$NAME\ $SIGNATURE/" $REGISTRY.old > $REGISTRY
+init() {
+    [[ -d "$DVC_DIR" ]] && die "DVC already initialised in this directory."
+    mkdir -p "$VAULT"; touch "$REGISTRY"
+    echo "Initialised empty DVC repository in $PWD/$DVC_DIR"
 }
 
-function current {
-  NAME=$1
-  SIGNATURE=$2
-  echo "$DATE $NAME $NULL $SIGNATURE" >> $REGISTRY
+register() {
+    local file="$1"; [[ -f "$file" ]] || die "file '$file' not found."
+    local new_sig; new_sig=$(md5sum "$file" | cut -d' ' -f1)
+    [[ -n "$new_sig" ]] || die "could not compute MD5 of '$file'."
+    local parent_sig; parent_sig=$(latest_signature "$file")
+    [[ -n "$parent_sig" && "$new_sig" == "$parent_sig" ]] && { echo "No changes in '$file' since the last registration."; return; }
+    local ts; ts=$(date +"%F-%T")
+    echo "$ts $file $new_sig $parent_sig" >> "$REGISTRY"
+    cp "$file" "$VAULT/$new_sig"
+    echo "Registered '$file' (signature: $new_sig)"
 }
 
-function check {
-  NAME=$1
-  REV=$2
-  NUM=$(grep "$NAME $REV" $REGISTRY | grep "$3" | wc -l)
-  if [[ $NUM -ge 2 ]]; then
-     echo "Ambiguity: more than one branch."
-     exit
-  fi
-  if [[ $NUM -eq 0 ]]; then
-     echo "No such branch exists."
-     exit
-  fi
+checkout() {
+    local file="$1"; [[ -f "$file" ]] || die "file '$file' does not exist."
+    resolve_rev "$file" "$2"; local sig; sig=$(basename "$_resolved")
+    grep -q "^[^ ]* $file $sig " "$REGISTRY" || die "revision '$sig' is not recorded for file '$file'."
+    cp "$_resolved" "$file"
+    echo "Checked out '$file' to revision $sig."
 }
 
-function init {
-  if [[ -e $VAULT ]]; then
-     echo "Already initialized."
-  else
-     mkdir $BASE
-     mkdir $VAULT
-     touch $REGISTRY $REGISTRY.temp
-  fi
-  exit
+explain() {
+    resolve_rev "$1" "$2"; local sig; sig=$(basename "$_resolved")
+    local psig; psig=$(grep "^[^ ]* $1 $sig " "$REGISTRY" | head -1 | awk '{print $4}' || true)
+    if [[ -z "$psig" ]]; then echo "This is the root revision (no parent)."
+    elif [[ -f "$VAULT/$psig" ]]; then diff -u "$VAULT/$psig" "$_resolved" || true
+    else die "parent revision $psig is missing from the vault."; fi
 }
 
-function register {
-  NAME=$1
-  SIGNATURE=$(md5sum $NAME | cut -c-32)
-  PARENT=$(grep "$NAME $NULL" $REGISTRY | cut -d' ' -f4)
-  LOOP=$(grep "$NAME $SIGNATURE $PARENT" $REGISTRY)
-  if [[ $PARENT = "" ]]; then
-     if [[ $EXISTS = !"" ]]; then 
-        echo "Already in registry."
-     else
-        echo "$DATE $NAME $NULL $NULL" >> $REGISTRY
-     fi
-  fi
-  if [[ $SIGNATURE = $PARENT ]]; then
-     echo "No discernible change in $NAME."
-     exit
-  fi
-  if [[ $LOOP = "" ]]; then
-     update $NAME $SIGNATURE
-     cp $NAME $VAULT/$SIGNATURE
-     current $NAME $SIGNATURE
-  else
-     echo "Loop?"
-  fi
-  exit
+log() { echo "History for '$1':"; grep "^[^ ]* $1 " "$REGISTRY" | sort -k1 || true; }
+
+graph() {
+    command -v graph-easy &>/dev/null || die "'graph-easy' not found. Install Graph::Easy to use this feature."
+    local dot; dot=$(mktemp --tmpdir "dvc-graph-XXXXXX.dot")
+    grep "^[^ ]* $1 " "$REGISTRY" | sort -k1 | awk -v f="$1" '
+        BEGIN { print "digraph G { node [shape=box];" }
+        { if ($4 != "") printf "  \"%s: %s\" -> \"%s: %s\" [label=\"%s\"];\n", f, $4, f, $3, $1
+          else printf "  \"%s: %s\" [label=\"%s: %s\\n(%s)\"];\n", f, $3, f, $3, $1 }
+        END { print "}" }' > "$dot"
+    graph-easy "$dot" --from=graphviz --as=ascii; rm -f "$dot"
 }
 
-function checkout {
-  NAME=$1
-  REV=$2
-  check $NAME $REV $3
-  SIGNATURE=$(md5sum $NAME | cut -c-32)
-  PARENT=$(grep "$NAME $SIGNATURE" $REGISTRY | grep "$3" | cut -d' ' -f4)
-  FULLNAME=$(ls $VAULT/$REV*)
-  update $NAME $SIGNATURE
-  cp $FULLNAME $NAME
-  SIGNATURE=$(md5sum $NAME | cut -c-32)
-  current $NAME $SIGNATURE
-  exit
-}
-
-function graph {
-  NAME=$1
-  SIGNATURE=$(md5sum $NAME | cut -c-32)
-  grep $1 $REGISTRY | \
-  sort -k1 | \
-  awk 'BEGIN { print "digraph G { node[shape=box];"; } \
-       { print "\"" $2 ": " $4 "\" -> \"" $2 ": " $3 "\";" } \
-       END { print "}" }' > $SIGNATURE.dot
-  graph-easy $SIGNATURE.dot --from=graphviz --as=ascii 
-  rm $SIGNATURE.dot
-  exit
-}
-
-function explain {
-  NAME=$1
-  REV=$2
-  check $NAME $REV $3
-  RAW=$(grep "$NAME $REV" $REGISTRY)
-  SIGNATURE=$(echo $RAW | cut -d' ' -f3)
-  PARENT=$(echo $RAW | cut -d' ' -f4)
-  if [[ $PARENT = $NULL ]]; then
-     echo "This is the root branch."
-  else
-     diff $VAULT/$SIGNATURE $VAULT/$PARENT
-  fi
-  exit
-}
-
-if [[ $1 = "init" ]]; then
-   init
-   exit
-fi
-if [[ -e $BASE ]]; then	
-   cleanUp
-else
-   echo "dvc doesn't track this directory"
-   exit
-fi
-case $1 in
-     checkout) checkout $2 $3 $4
-     ;;
-     register) register $2
-     ;;
-     graph) graph $2
-     ;;
-     explain) explain $2 $3
-     ;;
-     log) grep $2 $REGISTRY | sort -k1
-     ;;
-     *|help) echo "dvc init <directory>
-    Start tracking <directory>
-
-dvc register <file>
-    Register the current version of <file>
-
-dvc checkout <file> <revision>
-    Checkout <revision> version of <file>
-
-dvc explain <file> <revision>
-    Show the diff of <file> with its parent
-
-dvc log <file>
-    Show the version history of <file>
-
-dvc graph <file>
-    Show the version history of <file> as a graph"
-     ;;
+[[ $# -ge 1 ]] || usage
+case "$1" in
+    init)       init ;;
+    register)   [[ $# -eq 2 ]] || usage; register "$2" ;;
+    checkout)   [[ $# -eq 3 ]] || usage; checkout "$2" "$3" ;;
+    explain)    [[ $# -eq 3 ]] || usage; explain "$2" "$3" ;;
+    log)        [[ $# -eq 2 ]] || usage; log "$2" ;;
+    graph)      [[ $# -eq 2 ]] || usage; graph "$2" ;;
+    *)          usage ;;
 esac
-
